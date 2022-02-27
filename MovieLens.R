@@ -53,9 +53,6 @@ rmse_results
 alazar <- rep(3, nrow(test_set))
 RMSE(test_set$rating, alazar)
 
-
-#ME HE QUEDADO EN LA PAGINA 676
-#EL APARTADO 33.7.5
 #?lm
 #midiendo con modelo lineal para 
 #ver por promedio simple las calificaciones
@@ -81,3 +78,40 @@ predicted_ratings <- mu + test_set %>%
 
 RMSE(predicted_ratings, test_set$rating)
 
+#ya existe mejora a un promedio simple
+
+#ver si hay algún efecto de usuario
+#cuál es la calificación promedio de aquellos usuarios
+#que han calificado más de 100 películas
+
+train_set %>%
+  group_by(userId) %>%
+  filter(n()>=100) %>%
+  summarize(b_u = mean(rating)) %>%
+  ggplot(aes(b_u)) +
+  geom_histogram(bins = 30, color = "black")
+
+#entonces lo que se tendría que hacer es 
+#es una modelación lineal lm 
+#lm(rating ~ as.factor(movieId) + as.factor(userId))
+
+#pero sería lento, entonces lo que se hará es una aproximación
+#calculo de mu y rating de peli y estimando al usuario
+
+user_avgs <- train_set %>%
+  left_join(movie_avgs, by = "movieId") %>%
+  group_by(userId) %>%
+  summarize(b_u = mean(rating - mu - b_i))
+
+#ahora construyendo los predictores y ver si mejora el RMSE
+predicted_ratings <- test_set %>%
+  left_join(movie_avgs, by="movieId") %>%
+  left_join(user_avgs, by= "userId") %>%
+  mutate(pred = mu + b_i + b_u) %>%
+  pull(pred)
+
+RMSE(predicted_ratings, test_set$rating)
+
+
+#ME HE QUEDADO EN LA PAGINA 679
+#EL APARTADO 33.8
