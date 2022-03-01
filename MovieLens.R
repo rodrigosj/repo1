@@ -2,6 +2,7 @@ library(tidyverse)
 library(dslabs)
 library(caret)
 library(lubridate)
+library(ggrepel)
 data("movielens")
 
 #para mirar como tabla
@@ -406,4 +407,75 @@ short_names <- c("Godfather", "Godfather2", "Goodfellas",
 colnames(x) <- short_names
 cor(x, use = "pairwise.complete")
 
-round(r,1)
+#esto lo saqué del codigo del curso
+set.seed(1)
+options(digits = 2)
+Q <- matrix(c(1, 1, 1, -1, 1), ncol = 1)
+rownames(Q) <- c(m_1, m_2, m_3, m_4, m_5)
+P <- matrix(rep(c(2,0,-2), c(3,5,4)), ncol = 1)
+rownames(P) <- 1:nrow(P)
+
+X <- jitter(P%*%t(Q))
+X %>% knitr::kable(align = "c")
+
+cor(X)
+
+t(Q) %>% knitr::kable(align = "c")
+
+P
+
+set.seed(1)
+options(digits = 2)
+m_6 <- "Scent of a Woman"
+Q <- cbind(c(1,1,1,-1,-1,-1),
+           c(1,1,-1,-1,-1,1))
+
+rownames(Q) <- c(m_1,m_2,m_3,m_4,m_5,m_6)
+
+P <- cbind(rep(c(2,0,-2), c(3,5,4)),
+           c(-1,1,1,0,0,1,1,1,0,-1,-1,-1))/2
+
+rownames(P) <- 1:nrow(X)
+
+X <- jitter(P%*%t(Q), factor = 1)
+X %>% knitr::kable(align = "c")
+
+cor(X)
+
+t(Q) %>% knitr::kable(align = "c")
+
+P
+
+six_movies <- c(m_1,m_2,m_3,m_4,m_5,m_6)
+tmp <- y[,six_movies]
+cor(tmp, use = "pairwise.complete")
+
+#SVD y PCA
+
+y[is.na(y)] <- 0
+pca <- prcomp(y)
+
+dim(pca$rotation)
+
+dim(pca$x)
+
+qplot(1:nrow(x), pca$sdev, xlab = "PC")
+plot(pca$sdev)
+
+var_explained <- cumsum(pca$sdev^2/sum(pca$sdev^2))
+plot(var_explained)
+
+pcs <- data.frame(pca$rotation, name = colnames(y))
+pcs %>% ggplot(aes(PC1, PC2)) + geom_point() +
+  geom_text_repel(aes(PC1, PC2, label = name),
+                  data = filter(pcs,
+                                PC1 < -0.1 | PC1 > 0.1 | PC2 < -0.075 | PC2 > 0.1))
+
+
+pcs %>% select(name, PC1) %>% arrange(PC1) %>% slice(1:10)
+
+pcs %>% select(name, PC1) %>% arrange(desc(PC1)) %>% slice(1:10)
+
+pcs %>% select(name, PC2) %>% arrange(PC2) %>% slice(1:10)
+
+pcs %>% select(name, PC2) %>% arrange(desc(PC2)) %>% slice(1:10)
