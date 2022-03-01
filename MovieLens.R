@@ -194,3 +194,165 @@ movielens %>% group_by(genres) %>%
   geom_point() +
   geom_errorbar() +
   theme(axis.text.x = element_text(angle = 90, hjust = 0.5))
+
+#33.9 Regularización
+#probemos con sólo el b_i para seleccionar los errores de peliculas
+test_set %>%
+  left_join(movie_avgs, by= "movieId") %>%
+  mutate(residual = rating - (mu + b_i)) %>%
+  arrange(desc(abs(residual))) %>%
+  slice(1:10) %>%
+  pull (title)
+
+test_set %>% 
+  left_join(movie_avgs, by='movieId') %>%
+  mutate(residual = rating - (mu + b_i)) %>%
+  arrange(desc(abs(residual))) %>%  
+  slice(1:10) %>% 
+  pull(title)
+
+movie_titles <- movielens %>% 
+  select(movieId, title) %>%
+  distinct()
+
+#segun el primer estimador, las 10 mejores peliculas
+
+movie_avgs %>% left_join(movie_titles, by="movieId") %>%
+  arrange(desc(b_i)) %>% 
+  slice(1:10)  %>% 
+  pull(title)
+
+#segun el primer estimador, las 10 peores peliculas
+
+movie_avgs %>% left_join(movie_titles, by="movieId") %>%
+  arrange(b_i) %>% 
+  slice(1:10)  %>% 
+  pull(title)
+
+#todas desconocidas, ver la frecuencia de calificación
+
+train_set %>% count(movieId) %>%
+  left_join(movie_avgs, by="movieId") %>%
+  left_join(movie_titles, by= "movieId") %>%
+  arrange(desc(b_i)) %>%
+  slice(1:10) %>%
+  pull(n)
+
+train_set %>% count(movieId) %>%
+  left_join(movie_avgs, by="movieId") %>%
+  left_join(movie_titles, by= "movieId") %>%
+  arrange(b_i) %>%
+  slice(1:10) %>%
+  pull(n)
+
+#penalizando a las pelis que no tienen muchas valoraciones
+
+lambda <- 3
+
+mu <- mean(train_set$rating)
+
+#regularizando los promedios de las peliculas
+movie_reg_avgs <- train_set %>%
+  group_by(movieId) %>%
+  summarize(b_i = sum(rating - mu)/(n()+lambda), n_i = n())
+
+#comparación de los promedios simples y los regularizados
+
+tibble(original = movie_avgs$b_i,
+       regularizado = movie_reg_avgs$b_i,
+       n = movie_reg_avgs$n_i) %>%
+  ggplot(aes(original, regularizado, size=sqrt(n))) +
+  geom_point(shape=1, alpha=0.5)
+
+#ahora veamos las 10 mejores peliculas
+train_set %>%
+  count(movieId) %>%
+  left_join(movie_reg_avgs, by = "movieId") %>%
+  left_join(movie_titles, by = "movieId") %>%
+  arrange(desc(b_i)) %>%
+  slice(1:10) %>%
+  pull(title)
+
+#las peores peliculas
+train_set %>%
+  count(movieId) %>%
+  left_join(movie_reg_avgs, by = "movieId") %>%
+  left_join(movie_titles, by = "movieId") %>%
+  arrange(b_i) %>%
+  slice(1:10) %>%
+  pull(title)
+
+#los resultados mejoraron?
+predicted_ratings_con_penalizacion <- test_set %>%
+  left_join(movie_reg_avgs, by="movieId") %>%
+  mutate(pred = mu + b_i) %>%
+  pull (pred)
+RMSE(predicted_ratings_con_penalizacion, test_set$rating)
+
+#pero como se podría elegir la cantidad para penalizar
+#como podríamos saber los valores de ajuste lambda
+#validación cruzada
+
+lambdas <- seq(0,10,0.25)
+mu <- mean(train_set$rating)
+solo_la_suma <- train_set %>%
+  group_by(movieId) %>%
+  summarize(s = sum(rating - mu), n_i = n())
+
+rmses <- sapply(lambdas, function(l){
+  predicted_ratings <- test_set %>%
+    left_join(solo_la_suma, by="movieId") %>%
+    mutate(b_i = s/(n_i+1)) %>%
+    mutate(pred = mu + b_i) %>%
+    pull(pred)
+  return(RMSE(predicted_ratings, test_set$rating))
+})
+rmses <- sapply(lambdas, function(l){
+  predicted_ratings <- test_set %>%
+    left_join(just_the_sum, by='movieId') %>%
+    mutate(b_i = s/(n_i+l)) %>%
+    mutate(pred = mu + b_i) %>%
+    pull(pred)
+  return(RMSE(predicted_ratings, test_set$rating))
+})
+
+just_the_sum <- train_set %>%
+  group_by(movieId) %>%
+  summarize(s = sum(rating - mu), n_i = n())
+rmses <- sapply(lambdas, function(l){
+  predicted_ratings <- test_set %>%
+    left_join(just_the_sum, by='movieId') %>%
+    mutate(b_i = s/(n_i+l)) %>%
+    mutate(pred = mu + b_i) %>%
+    pull(pred)
+  return(RMSE(predicted_ratings, test_set$rating))
+})
+qplot(lambdas, rmses)
+lambdas[which.min(rmses)]
+
+#el anterior ejemplo solo es para fines ilustrativos. en realdiad se tendría que hacer con solo el set de entrenamiento
+
+lambdas <- seq(0, 10, 0.25)
+rmses <- sapply(lambdas, function(l){
+  mu <- mean(train_set$rating)
+  b_i <- train_set %>%
+    group_by(movieId) %>%
+    summarize(b_i = sum(rating - mu)/(n()+l))
+  b_u <- train_set %>%
+    left_join(b_i, by="movieId") %>%
+    group_by(userId) %>%
+    summarize(b_u = sum(rating - b_i - mu)/(n()+l))
+  predicted_ratings <-
+    test_set %>%
+    left_join(b_i, by = "movieId") %>%
+    left_join(b_u, by = "userId") %>%
+    mutate(pred = mu + b_i + b_u) %>%
+    pull(pred)
+  return(RMSE(predicted_ratings, test_set$rating))
+})
+qplot(lambdas, rmses)
+
+lambda <- lambdas[which.min(rmses)]
+lambda
+
+#ME QUEDE EN 33.11 PAGINA 688
