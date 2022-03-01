@@ -1,6 +1,7 @@
 library(tidyverse)
 library(dslabs)
 library(caret)
+library(lubridate)
 data("movielens")
 
 #para mirar como tabla
@@ -115,3 +116,81 @@ RMSE(predicted_ratings, test_set$rating)
 
 #ME HE QUEDADO EN LA PAGINA 679
 #EL APARTADO 33.8
+#Q1. Compute the number of ratings for each movie and then plot it against the year the movie came out. Use the square root transformation on the counts.
+#What year has the highest median number of ratings?
+
+movielens %>% group_by(movieId) %>%
+  summarize(n = n(), year = as.character(first(year))) %>%
+  qplot(year, n, data = ., geom = "boxplot") +
+  coord_trans(y = "sqrt") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+#2. Vemos que, en promedio, las películas que salieron después de 1993 obtienen más calificaciones. También vemos que con las películas más nuevas, a partir de 1993, el número de
+#calificaciones disminuye con el año: entre más reciente sea una película, menos tiempo han
+#tenido los usuarios para calificarla.
+#Entre las películas que salieron en 1993 o más tarde, ¿cuáles son las 25 películas con más
+#calificaciones por año? Además, indique la calificación promedio.
+
+movielens %>%
+  filter(year >= 1993) %>%
+  group_by(movieId) %>%
+  summarize(n = n(), years = 2018 - first(year),
+            title = title[1],
+            rating = mean(rating)) %>%
+  mutate(rate = n/years) %>%
+  top_n(25, rate) %>%
+  arrange(desc(rate))
+
+#3. De la tabla construida en el ejemplo anterior, vemos que las películas mejor calificadas
+#tienden a tener calificaciones superiores al promedio. Esto no es sorprendente: más personas
+#ven películas populares. Para confirmar esto, estratifique las películas posteriores a 1993 por
+#calificaciones por año y calcule sus calificaciones promedio. Haga un gráfico de la calificación
+#promedio versus calificaciones por año y muestre un estimador de la tendencia.
+
+movielens %>%
+  filter(year >= 1993) %>%
+  group_by(movieId) %>%
+  summarize(n = n(), years = 2017 - first(year),
+            title = title[1],
+            rating = mean(rating)) %>%
+  mutate(rate = n/years) %>%
+  ggplot(aes(rate, rating)) +
+  geom_point() +
+  geom_smooth()
+
+#Q5. The movielens dataset also includes a time stamp. This variable represents the time and data in which the rating was provided. The units are seconds since January 1, 1970. Create a new column date with the date.
+
+movielens <- mutate(movielens, date = as_datetime(timestamp))
+
+head(movielens)
+
+#6. Calcule la calificación promedio de cada semana y calcule este promedio para cada día.
+#Sugerencia: use la función round_date antes de group_by.
+
+movielens %>% mutate(date = round_date(date, unit = "week")) %>%
+  group_by(date) %>%
+  summarize(rating = mean(rating)) %>%
+  ggplot(aes(date, rating)) +
+  geom_point() +
+  geom_smooth()
+
+#7. El gráfico muestra alguna evidencia de un efecto temporero. Si definimos 𝑑𝑢,𝑖 como el día
+#que el usuario 𝑢 hizo su calificación de la película 𝑖, ¿cuál de los siguientes modelos es el
+#más apropiado?
+
+#d. 𝑌𝑢,𝑖 = 𝜇 + 𝑏𝑖 + 𝑏𝑢 + 𝑓(𝑑𝑢,𝑖) + 𝜀𝑢,𝑖, con 𝑓 una función suave de 𝑑𝑢,𝑖.
+
+#8 8. Los datos movielens también tienen un columna genres. Esta columna incluye todos
+#los géneros que aplican a la película. Algunas películas pertenecen a varios géneros. Defina
+#una categoría como cualquier combinación que aparezca en esta columna. Mantenga solo
+#categorías con más de 1,000 calificaciones. Luego, calcule el promedio y error estándar para
+#cada categoría. Grafique estos usando diagramas de barras de error.
+
+movielens %>% group_by(genres) %>%
+  summarize(n = n(), avg = mean(rating), se = sd(rating)/sqrt(n())) %>%
+  filter(n >= 1000) %>%
+  mutate(genres = reorder(genres, avg)) %>%
+  ggplot(aes(x = genres, y = avg, ymin = avg - 2*se, ymax = avg + 2*se)) +
+  geom_point() +
+  geom_errorbar() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 0.5))
